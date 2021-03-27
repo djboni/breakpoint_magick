@@ -1,0 +1,10 @@
+# vscode
+workspace.code-workspace
+
+# vim
+*.swp
+
+# python
+__pycache__/
+*.pyc
+
