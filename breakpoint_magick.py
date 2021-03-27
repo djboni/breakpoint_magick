@@ -12,7 +12,7 @@ import sqlite3
 import json
 import collections
 
-BreakpointTuple = collections.namedtuple('Breakpoint', ['file', 'line', 'enabled'])
+BreakpointTuple = collections.namedtuple('Breakpoint', ['file', 'line', 'enabled', 'hit_count', 'cond'])
 
 def GetVSCodeBreakpoints():
     # VS Code saves breakpoints in a SQLite3 database, in the table ItemTable,
@@ -45,14 +45,27 @@ def GetVSCodeBreakpoints():
                     brk_list = json.loads(json_data)
                     # Process breakpoints
                     for brk in brk_list:
+                        print(brk)
                         # Add each breakpoint to the list 'break_point_list'
                         brk_path = brk['uri']['path']
-                        brk_line = brk['lineNumber']
-                        brk_en = brk['enabled']
                         if os.name == 'nt':
                             # Fix path for Windows: remove prefixed backslash
                             brk_path = brk_path[1:]
-                        brk_tuple = BreakpointTuple(brk_path, brk_line, brk_en)
+
+                        brk_line = brk['lineNumber']
+                        brk_en = brk['enabled']
+
+                        if 'hitCondition' in brk:
+                            brk_hit = int(brk['hitCondition'])
+                        else:
+                            brk_hit = None
+
+                        if 'condition' in brk:
+                            brk_cond = brk['condition']
+                        else:
+                            brk_cond = None
+
+                        brk_tuple = BreakpointTuple(brk_path, brk_line+1000, brk_en, brk_hit, brk_cond)
                         break_point_list.append(brk_tuple)
 
     return break_point_list
@@ -61,10 +74,22 @@ if __name__ == '__main__':
     # Get a list with breakpoints
     break_point_list = GetVSCodeBreakpoints()
 
-    # Dummy example of processing into new format
+    # Dummy example of processing to new format
     print("# Breakpoints")
     for brk in break_point_list:
         file_name = brk.file.replace('"', '\\"')
         file_line = brk.line
         enabled = 'Enabled' if brk.enabled else 'Disabled'
-        print("SetBreakpoint \"%s\" %d %s" % (file_name, file_line, enabled))
+        hit_count = brk.hit_count
+        cond = brk.cond
+        if cond != None:
+            cond = cond.replace('"', '\\"')
+
+        if hit_count != None and cond != None:
+            print("SetBreakpointHitCountCondition \"%s\" %d %s %d \"%s\"" % (file_name, file_line, enabled, hit_count, cond))
+        elif hit_count != None:
+            print("SetBreakpointHitCount \"%s\" %d %s %d" % (file_name, file_line, enabled, hit_count))
+        elif cond != None:
+            print("SetBreakpointCondition \"%s\" %d %s \"%s\"" % (file_name, file_line, enabled, cond))
+        else:
+            print("SetBreakpoint \"%s\" %d %s" % (file_name, file_line, enabled))
