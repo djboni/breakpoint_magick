@@ -45,7 +45,6 @@ def GetVSCodeBreakpoints():
                     brk_list = json.loads(json_data)
                     # Process breakpoints
                     for brk in brk_list:
-                        print(brk)
                         # Add each breakpoint to the list 'break_point_list'
                         brk_path = brk['uri']['path']
                         if os.name == 'nt':
@@ -65,7 +64,7 @@ def GetVSCodeBreakpoints():
                         else:
                             brk_cond = None
 
-                        brk_tuple = BreakpointTuple(brk_path, brk_line+1000, brk_en, brk_hit, brk_cond)
+                        brk_tuple = BreakpointTuple(brk_path, brk_line, brk_en, brk_hit, brk_cond)
                         break_point_list.append(brk_tuple)
 
     return break_point_list
