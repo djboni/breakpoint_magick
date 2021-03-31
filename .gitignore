@@ -1,5 +1,6 @@
 # vscode
 workspace.code-workspace
+.vscode/
 
 # vim
 *.swp
@@ -7,4 +8,3 @@ workspace.code-workspace
 # python
 __pycache__/
 *.pyc
-
