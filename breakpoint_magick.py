@@ -14,6 +14,7 @@ import collections
 import re
 
 BreakpointTuple = collections.namedtuple('Breakpoint', ['file', 'line', 'enabled', 'hit_count', 'cond'])
+WatchExpressionTuple = collections.namedtuple('WatchExpression', ['expr',])
 
 def GetVSCodeBreakpoints():
     # VS Code uses file names and lines of the files to set breakpoints.
@@ -28,6 +29,7 @@ def GetVSCodeBreakpoints():
     #     Linux   $HOME/.config/Code/User/workspaceStorage/*/state.vscdb
 
     breakpoint_list = list()
+    watchexpression_list = list()
 
     # OS dependent path for databases
     if os.name == 'nt':
@@ -41,7 +43,7 @@ def GetVSCodeBreakpoints():
     # the list 'breakpoint_list'
     for file_path in glob.glob(path_breakpoints):
         with sqlite3.connect(file_path) as con:
-            # Read SQLite3 database
+            # Read SQLite3 database for the breakpoints
             cur = con.cursor()
             cur.execute("SELECT value FROM ItemTable where key='debug.breakpoint'")
             res = cur.fetchall()
@@ -73,9 +75,23 @@ def GetVSCodeBreakpoints():
                         brk_tuple = BreakpointTuple(brk_path, brk_line, brk_en, brk_hit, brk_cond)
                         breakpoint_list.append(brk_tuple)
 
-    return breakpoint_list
+            # Read SQLite3 database for the watch expressions
+            cur.execute("SELECT value FROM ItemTable where key='debug.watchexpressions'")
+            res = cur.fetchall()
+            for tuple_json_data in res:
+                # Read JSON_DATA
+                for json_data in tuple_json_data:
+                    watch_list = json.loads(json_data)
+                    # Process watch expressions
+                    for watch in watch_list:
+                        # Add each watch expression to the list 'watchexpression_list'
+                        watch_expr = watch['name']
+                        watch_tuple = WatchExpressionTuple(watch_expr)
+                        watchexpression_list.append(watch_tuple)
 
-def SetTrace32Breakpoints(breakpoint_list):
+    return (breakpoint_list, watchexpression_list)
+
+def SetTrace32Breakpoints(breakpoint_list, watchexpression_list):
     # TRACE32 uses function names and lines of the functions to set breakpoints.
     #
     # This function outputs a string that contain breakpoint information in
@@ -84,7 +100,8 @@ def SetTrace32Breakpoints(breakpoint_list):
     # This function converts (file,file_line) breakpoints into
     # (function,func_line) and writes breakpoints to TRACE32 language.
 
-    trace32_breakpoint_str = 'Break.RESet\n'
+    trace32_breakpoint_str = ''
+    trace32_watchexpression_str = ''
 
     # Regex to process files
     # Accept only .C source files
@@ -129,16 +146,23 @@ def SetTrace32Breakpoints(breakpoint_list):
 
         trace32_breakpoint_str += """Break.Set %s%s /Program%s%s%s\n""" % (function_name, function_line, enabled, hit_count, cond)
 
-    return trace32_breakpoint_str
+    # For each watch expression
+    for watch in watchexpression_list:
+        expr = watch.expr
+        trace32_watchexpression_str += "Var.AddWatch %s\n" % (expr,)
+
+    return (trace32_breakpoint_str, trace32_watchexpression_str)
 
 if __name__ == '__main__':
     # Get a list with breakpoints
-    breakpoint_list = GetVSCodeBreakpoints()
+    breakpoint_list, watchexpression_list = GetVSCodeBreakpoints()
 
     if True:
         # Convert to TRACE32 breakpoints
-        trace32_breakpoint_str = SetTrace32Breakpoints(breakpoint_list)
+        trace32_breakpoint_str, trace32_watchexpression_str = (
+            SetTrace32Breakpoints(breakpoint_list, watchexpression_list))
         print(trace32_breakpoint_str)
+        print(trace32_watchexpression_str)
     else:
         # Dummy example of processing to new format
         print("# Breakpoints")
@@ -159,3 +183,8 @@ if __name__ == '__main__':
                 print("SetBreakpointCondition \"%s\" %d %s \"%s\"" % (file_name, file_line, enabled, cond))
             else:
                 print("SetBreakpoint \"%s\" %d %s" % (file_name, file_line, enabled))
+
+        print("# Watch Expressions")
+        for watch in watchexpression_list:
+            watch_expr = watch.expr.replace('"', '\\"')
+            print("SetWatch \"%s\"" % (watch_expr))
